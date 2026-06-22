@@ -30,6 +30,7 @@ const Home = () => {
         name: store.name,
         noOfBooks,
         averagePrice,
+        storeId: store.id, // Return the store ID for linking to the inventory page
       };
     });
   }, [stores, inventory]);
@@ -70,7 +71,7 @@ const Home = () => {
                 name={store.name}
                 noOfBooks={store.noOfBooks}
                 averagePrice={store.averagePrice}
-                id={store.id}
+                id={store.storeId} // Pass the store ID to the StoreCard component
               />
             </div>
           ))}

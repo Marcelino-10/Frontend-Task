@@ -11,8 +11,10 @@ const BooksTable = ({
   editName,
   setEditName,
   setBooks,
+  setInventory,
+  isInventory,
   deleteBook,
-  columnsConfig = ['id', 'name', 'pages', 'author', 'actions'], // Default columns
+  columnsConfig = ['id', 'name', 'pages', 'author', 'price', 'actions'], // Default columns
 }) => {
   // Create a lookup map for authors
   const authorMap = useMemo(() => {
@@ -24,11 +26,21 @@ const BooksTable = ({
 
   // Enrich books with author names
   const enrichedBooks = useMemo(() => {
-    return books.map((book) => ({
-      ...book,
-      author_name: authorMap[book.author_id] || 'Unknown Author',
-    }));
-  }, [books, authorMap]);
+    return books.map((book) => {
+      const author_name = authorMap[book.author_id] || 'Unknown Author';
+      
+      // Only format price if it exists and we are in inventory view
+      const price = isInventory && book.price !== undefined 
+        ? Number(book.price).toFixed(2) 
+        : undefined;
+
+      return {
+        ...book,
+        author_name,
+        ...(isInventory && { price }), // Only add price property if in inventory
+      };
+    });
+  }, [books, authorMap, isInventory]);
 
   // Define all possible columns
   const allColumns = useMemo(
@@ -56,7 +68,26 @@ const BooksTable = ({
       },
       pages: { header: 'Pages', accessorKey: 'page_count' },
       author: { header: 'Author', accessorKey: 'author_name' },
-      price: { header: 'Price', accessorKey: 'price' },
+      price: {
+        header: 'Price',
+        accessorKey: 'price',
+        cell: ({ row }) =>
+          editingRowId === row.original.id ? (
+            <input
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSave(row.original.id);
+                if (e.key === 'Escape') handleCancel();
+              }}
+              className="border border-gray-300 rounded p-1 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
+            />
+          ) : (
+            row.original.price
+          ),
+      },
       actions: {
         header: 'Actions',
         id: 'actions',
@@ -78,22 +109,48 @@ const BooksTable = ({
 
   // Select columns based on columnsConfig
   const columns = useMemo(() => {
-    return columnsConfig.map((colKey) => allColumns[colKey]).filter(Boolean);
-  }, [columnsConfig, allColumns]);
+    return columnsConfig
+      .filter((colKey) => {
+        if (colKey === 'price' && !isInventory) return false;
+        return true;
+      })
+      .map((colKey) => allColumns[colKey])
+      .filter(Boolean);
+  }, [columnsConfig, allColumns, isInventory]);
 
   // Handle editing
   const handleEdit = (book) => {
     setEditingRowId(book.id);
-    setEditName(book.name);
+    setEditName(isInventory ? book.price : book.name);
   };
 
   // Save edited name
   const handleSave = (id) => {
-    setBooks(
-      books.map((book) =>
-        book.id === id ? { ...book, name: editName } : book
-      )
-    );
+    if (isInventory) {
+      // Update Books State if books array contains the price in this view
+      setBooks((prevBooks) =>
+        prevBooks.map((book) =>
+          book.id === id ? { ...book, price: editName } : book
+        )
+      );
+      
+      if (typeof setInventory === 'function') {
+        setInventory((prevInventory) =>
+          prevInventory.map((item) =>
+            item.book_id === id
+              ? { ...item, price: parseFloat(editName) || 0 }
+              : item
+          )
+        );
+      }
+    }
+    else {
+      setBooks((prevBooks) =>
+        prevBooks.map((book) =>
+          book.id === id ? { ...book, name: editName } : book
+        )
+      );
+    }
     setEditingRowId(null);
     setEditName('');
   };
